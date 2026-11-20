@@ -1,0 +1,29 @@
+﻿# Build output
+target/
+*.class
+*.jar
+*.war
+*.log
+hs_err_pid*
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local secrets and overrides (use env vars DB_PASSWORD, JWT_SECRET instead)
+.env
+*.env
+application-local.properties
+application-local.yml
+
+# Agent tooling scratch space
+.bob/tmp/

@@ -1,0 +1,1107 @@
+openapi: 3.0.3
+info:
+  title: E-Bookstore API
+  version: 1.0.0
+  description: |
+    Backend for the capstone e-bookstore. One Spring Boot app, six domain modules:
+    member, store, catalog, order, payment, shipping.
+
+    * Auth: JWT bearer token from `/api/auth/login`. Roles: `CUSTOMER`, `ADMIN`.
+    * Guests can browse and fill a basket (send the `X-Guest-Token` returned by the basket API).
+      Checkout requires login. Logging in with `X-Guest-Token` merges the guest basket.
+    * Entitlement: ADMIN sees inactive products too; guests and CUSTOMER see active ones only.
+    * Currency is INR. Dates are ISO-8601.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: Auth
+  - name: Member
+  - name: Store
+  - name: Catalog
+  - name: Basket
+  - name: Order
+  - name: Payment
+  - name: Shipping
+security:
+  - bearerAuth: []
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a customer
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login. Optional X-Guest-Token merges the guest basket into the user basket
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/GuestToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Logged in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/members/me:
+    get:
+      tags: [Member]
+      summary: Current profile (includes gift points and wallet balance)
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserView' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/members/me/wallet/topup:
+    post:
+      tags: [Member]
+      summary: Add money to the wallet (simple, no gateway)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TopUpRequest' }
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/addresses:
+    get:
+      tags: [Member]
+      summary: List saved addresses
+      responses:
+        '200':
+          description: Addresses
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Address' }
+    post:
+      tags: [Member]
+      summary: Save an address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Address' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/addresses/{id}:
+    put:
+      tags: [Member]
+      summary: Update an address
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressRequest' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Address' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Member]
+      summary: Delete an address
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/stores:
+    get:
+      tags: [Store]
+      summary: List stores
+      security: []
+      responses:
+        '200':
+          description: Stores
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Store' }
+    post:
+      tags: [Store]
+      summary: Create a store (ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StoreRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Store' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/stores/{id}/policies:
+    get:
+      tags: [Store]
+      summary: List store policies
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StorePolicy' }
+    post:
+      tags: [Store]
+      summary: Create a store policy (ADMIN)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StorePolicyRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StorePolicy' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/stores/{id}/catalogs:
+    get:
+      tags: [Store]
+      summary: List catalogs of a store
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Catalogs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CatalogInfo' }
+    post:
+      tags: [Store]
+      summary: Create a catalog (ADMIN)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CatalogRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogInfo' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/categories:
+    get:
+      tags: [Catalog]
+      summary: List categories
+      security: []
+      responses:
+        '200':
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Named' }
+  /api/brands:
+    get:
+      tags: [Catalog]
+      summary: List brands (publishers). Optional category filter shows brands that have books in it
+      security: []
+      parameters:
+        - name: categoryId
+          in: query
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Brands
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Named' }
+  /api/products:
+    get:
+      tags: [Catalog]
+      summary: Search, filter and sort products
+      security: []
+      parameters:
+        - { name: q, in: query, description: keyword in title, author or description, schema: { type: string } }
+        - { name: categoryId, in: query, schema: { type: integer, format: int64 } }
+        - { name: brandId, in: query, schema: { type: integer, format: int64 } }
+        - { name: language, in: query, schema: { type: string } }
+        - { name: format, in: query, schema: { $ref: '#/components/schemas/BookFormat' } }
+        - { name: minPrice, in: query, schema: { type: number } }
+        - { name: maxPrice, in: query, schema: { type: number } }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [relevance, price_asc, price_desc, newest, rating]
+            default: relevance
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Page of products
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductPage' }
+    post:
+      tags: [Catalog]
+      summary: Create a product (ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/products/{id}:
+    get:
+      tags: [Catalog]
+      summary: Product page (tentative delivery date, writer, related reads)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Product
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Catalog]
+      summary: Update a product (ADMIN)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductRequest' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductDetail' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Catalog]
+      summary: Deactivate a product (ADMIN, soft delete)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204': { description: Deactivated }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/products/{id}/related:
+    get:
+      tags: [Catalog]
+      summary: Related reads (same category or writer)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Related products
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProductView' }
+  /api/products/{id}/reviews:
+    get:
+      tags: [Catalog]
+      summary: List reviews
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Review' }
+    post:
+      tags: [Catalog]
+      summary: Add or replace my review (rating 1-5, comment up to 100 chars). Updates rating on the product
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewRequest' }
+      responses:
+        '201':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Review' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/writers/{id}:
+    get:
+      tags: [Catalog]
+      summary: About the writer, with books
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Writer
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WriterView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/home:
+    get:
+      tags: [Catalog]
+      summary: Home sections (Recommended for You, Bestsellers this Month, New Launches)
+      security: []
+      responses:
+        '200':
+          description: Home
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomeView' }
+  /api/recommendations:
+    get:
+      tags: [Catalog]
+      summary: Recommendations from order history (bestsellers for guests / no history)
+      security: []
+      responses:
+        '200':
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProductView' }
+  /api/wishlist:
+    get:
+      tags: [Catalog]
+      summary: My wishlist
+      responses:
+        '200':
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProductView' }
+  /api/wishlist/{productId}:
+    post:
+      tags: [Catalog]
+      summary: Add to wishlist (idempotent)
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '204': { description: Added }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Catalog]
+      summary: Remove from wishlist
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '204': { description: Removed }
+  /api/basket:
+    get:
+      tags: [Basket]
+      summary: Get basket (logged in user, or guest via X-Guest-Token)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/GuestToken'
+      responses:
+        '200':
+          description: Basket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BasketView' }
+  /api/basket/items:
+    post:
+      tags: [Basket]
+      summary: Add a product. For a guest without a token a basket is created and `guestToken` returned
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/GuestToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BasketItemRequest' }
+      responses:
+        '200':
+          description: Basket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BasketView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/basket/items/{productId}:
+    put:
+      tags: [Basket]
+      summary: Set quantity (+/- in the cart). Quantity 0 removes the item
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+        - $ref: '#/components/parameters/GuestToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QuantityRequest' }
+      responses:
+        '200':
+          description: Basket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BasketView' }
+    delete:
+      tags: [Basket]
+      summary: Remove an item
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+        - $ref: '#/components/parameters/GuestToken'
+      responses:
+        '200':
+          description: Basket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BasketView' }
+  /api/checkout/quote:
+    post:
+      tags: [Order]
+      summary: Price, tax, delivery charges, coupon and gift point discount for the basket (Apply button)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QuoteRequest' }
+      responses:
+        '200':
+          description: Quote
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Quote' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/orders:
+    post:
+      tags: [Order]
+      summary: Checkout (Pay Now). Places the order and pays through the mock gateway
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CheckoutRequest' }
+      responses:
+        '201':
+          description: Purchase successful
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402':
+          description: Payment declined (order is not created)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    get:
+      tags: [Order]
+      summary: My order history, newest first
+      responses:
+        '200':
+          description: Orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/OrderView' }
+  /api/orders/{id}:
+    get:
+      tags: [Order]
+      summary: Order details
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/orders/{id}/cancel:
+    post:
+      tags: [Order]
+      summary: Cancel within 48 hours of placing. Refunds payment, restores stock and gift points
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Not cancellable (window passed or already shipped)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/orders/{id}/return:
+    post:
+      tags: [Order]
+      summary: Return a delivered order (simple version, refunds payment)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Return requested
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderView' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/orders/{id}/buy-again:
+    post:
+      tags: [Order]
+      summary: Add the items of a past order to the basket
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Basket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BasketView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/orders/{id}/status:
+    put:
+      tags: [Order]
+      summary: Move an order to SHIPPED or DELIVERED (ADMIN)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StatusRequest' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderView' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/coupons:
+    post:
+      tags: [Order]
+      summary: Create a percentage coupon (ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CouponRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Coupon' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/payments/order/{orderId}:
+    get:
+      tags: [Payment]
+      summary: Payment of one of my orders
+      parameters:
+        - { name: orderId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200':
+          description: Payment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/shipping/rates:
+    get:
+      tags: [Shipping]
+      summary: Flat shipping rate and delivery days per region
+      security: []
+      responses:
+        '200':
+          description: Rates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ShippingRate' }
+  /api/shipping/estimate:
+    get:
+      tags: [Shipping]
+      summary: Tentative delivery date and charge for a product and state
+      security: []
+      parameters:
+        - { name: productId, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Estimate
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShippingEstimate' }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    GuestToken:
+      name: X-Guest-Token
+      in: header
+      required: false
+      schema: { type: string }
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Requires ADMIN
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Conflict with current state
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      properties:
+        status: { type: integer }
+        error: { type: string }
+        message: { type: string }
+        fieldErrors:
+          type: object
+          additionalProperties: { type: string }
+    Named:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+    BookFormat:
+      type: string
+      enum: [PAPERBACK, HARDCOVER, EBOOK]
+    PaymentMethod:
+      type: string
+      enum: [CREDIT_CARD, DEBIT_CARD, UPI, WALLET]
+    OrderStatus:
+      type: string
+      enum: [PLACED, SHIPPED, DELIVERED, CANCELLED, RETURN_REQUESTED]
+    RegisterRequest:
+      type: object
+      required: [firstName, lastName, email, password]
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+    AuthResponse:
+      type: object
+      properties:
+        token: { type: string }
+        tokenType: { type: string, example: Bearer }
+        user: { $ref: '#/components/schemas/UserView' }
+    UserView:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [CUSTOMER, ADMIN] }
+        giftPoints: { type: integer }
+        walletBalance: { type: number }
+    TopUpRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: number, minimum: 1 }
+    AddressRequest:
+      type: object
+      required: [firstName, lastName, addressLine, email, phone, city, pin, state, country]
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        addressLine: { type: string }
+        email: { type: string, format: email }
+        phoneCountryCode: { type: string, example: '+91' }
+        phone: { type: string }
+        city: { type: string }
+        pin: { type: string }
+        state: { type: string }
+        country: { type: string }
+        isDefault: { type: boolean }
+    Address:
+      allOf:
+        - $ref: '#/components/schemas/AddressRequest'
+        - type: object
+          properties:
+            id: { type: integer, format: int64 }
+    StoreRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    Store:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        active: { type: boolean }
+    StorePolicyRequest:
+      type: object
+      required: [title, description]
+      properties:
+        title: { type: string }
+        description: { type: string }
+    StorePolicy:
+      allOf:
+        - $ref: '#/components/schemas/StorePolicyRequest'
+        - type: object
+          properties:
+            id: { type: integer, format: int64 }
+            storeId: { type: integer, format: int64 }
+    CatalogRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    CatalogInfo:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        storeId: { type: integer, format: int64 }
+        name: { type: string }
+        active: { type: boolean }
+    ProductRequest:
+      type: object
+      required: [title, price, categoryId, brandId, writerId, format, language]
+      properties:
+        title: { type: string }
+        description: { type: string, maxLength: 1000 }
+        backCoverBlurb: { type: string, maxLength: 4000 }
+        isbn: { type: string }
+        language: { type: string }
+        format: { $ref: '#/components/schemas/BookFormat' }
+        price: { type: number, minimum: 0 }
+        stock: { type: integer, minimum: 0 }
+        deliveryDays: { type: integer, minimum: 0, nullable: true }
+        coverUrl: { type: string }
+        genreTags: { type: array, items: { type: string } }
+        active: { type: boolean, default: true }
+        categoryId: { type: integer, format: int64 }
+        brandId: { type: integer, format: int64 }
+        writerId: { type: integer, format: int64 }
+        catalogId: { type: integer, format: int64, nullable: true }
+    ProductView:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        title: { type: string }
+        description: { type: string }
+        authorId: { type: integer, format: int64 }
+        author: { type: string }
+        format: { $ref: '#/components/schemas/BookFormat' }
+        genreTags: { type: array, items: { type: string } }
+        price: { type: number }
+        coverUrl: { type: string }
+        rating: { type: number }
+        ratingCount: { type: integer }
+        inStock: { type: boolean }
+        active: { type: boolean }
+        deliveryDate: { type: string, format: date, description: today + delivery days }
+    ProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/ProductView'
+        - type: object
+          properties:
+            backCoverBlurb: { type: string }
+            publisher: { type: string }
+            isbn: { type: string }
+            language: { type: string }
+            copiesSold: { type: integer }
+            stock: { type: integer }
+            category: { $ref: '#/components/schemas/Named' }
+            writer: { $ref: '#/components/schemas/WriterInfo' }
+            related: { type: array, items: { $ref: '#/components/schemas/ProductView' } }
+    ProductPage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/ProductView' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+    WriterInfo:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        bio: { type: string }
+    WriterView:
+      allOf:
+        - $ref: '#/components/schemas/WriterInfo'
+        - type: object
+          properties:
+            books: { type: array, items: { $ref: '#/components/schemas/ProductView' } }
+    HomeView:
+      type: object
+      properties:
+        recommended: { type: array, items: { $ref: '#/components/schemas/ProductView' } }
+        bestsellers: { type: array, items: { $ref: '#/components/schemas/ProductView' } }
+        newLaunches: { type: array, items: { $ref: '#/components/schemas/ProductView' } }
+    ReviewRequest:
+      type: object
+      required: [rating]
+      properties:
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string, maxLength: 100 }
+    Review:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        productId: { type: integer, format: int64 }
+        userName: { type: string }
+        rating: { type: integer }
+        comment: { type: string }
+        createdAt: { type: string, format: date-time }
+    BasketItemRequest:
+      type: object
+      required: [productId]
+      properties:
+        productId: { type: integer, format: int64 }
+        quantity: { type: integer, minimum: 1, default: 1 }
+    QuantityRequest:
+      type: object
+      required: [quantity]
+      properties:
+        quantity: { type: integer, minimum: 0 }
+    BasketItemView:
+      type: object
+      properties:
+        productId: { type: integer, format: int64 }
+        title: { type: string }
+        coverUrl: { type: string }
+        price: { type: number }
+        quantity: { type: integer }
+        lineTotal: { type: number }
+        deliveryDate: { type: string, format: date }
+    BasketView:
+      type: object
+      properties:
+        guestToken: { type: string, nullable: true, description: only for guest baskets }
+        itemCount: { type: integer, description: cart badge }
+        items: { type: array, items: { $ref: '#/components/schemas/BasketItemView' } }
+        subtotal: { type: number }
+        recommendations: { type: array, items: { $ref: '#/components/schemas/ProductView' } }
+    QuoteRequest:
+      type: object
+      properties:
+        couponCode: { type: string, nullable: true }
+        giftPointsToRedeem: { type: integer, minimum: 0, default: 0 }
+        state: { type: string, nullable: true, description: drives the regional shipping rate }
+    Quote:
+      type: object
+      properties:
+        subtotal: { type: number, description: Price }
+        tax: { type: number }
+        deliveryCharge: { type: number, description: 0 is shown as Free }
+        discount: { type: number, description: coupon discount }
+        giftPointsRedeemed: { type: integer }
+        giftPointsDiscount: { type: number }
+        totalAmount: { type: number }
+        giftPointsToEarn: { type: integer }
+        estimatedDelivery: { type: string, format: date }
+    PaymentRequest:
+      type: object
+      required: [method]
+      description: |
+        CREDIT_CARD / DEBIT_CARD need cardNumber, expiry (MM/YY), cvv.
+        UPI needs upiId. WALLET needs enough wallet balance.
+        Only the last 4 digits of the card are stored. CVV and full number are never persisted.
+      properties:
+        method: { $ref: '#/components/schemas/PaymentMethod' }
+        cardHolder: { type: string }
+        cardNumber: { type: string }
+        expiry: { type: string, example: 12/30 }
+        cvv: { type: string }
+        upiId: { type: string }
+    CheckoutRequest:
+      type: object
+      required: [payment]
+      description: Provide `addressId` (Use Saved Address) or an inline `address`
+      properties:
+        addressId: { type: integer, format: int64, nullable: true }
+        address: { $ref: '#/components/schemas/AddressRequest' }
+        saveAddress: { type: boolean, default: false }
+        couponCode: { type: string, nullable: true }
+        giftPointsToRedeem: { type: integer, default: 0 }
+        payment: { $ref: '#/components/schemas/PaymentRequest' }
+    OrderItemView:
+      type: object
+      properties:
+        productId: { type: integer, format: int64 }
+        title: { type: string }
+        quantity: { type: integer }
+        unitPrice: { type: number }
+        deliveryDate: { type: string, format: date }
+    PaymentView:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        method: { $ref: '#/components/schemas/PaymentMethod' }
+        status: { type: string, enum: [SUCCESS, FAILED, REFUNDED] }
+        amount: { type: number }
+        cardLast4: { type: string, nullable: true }
+        transactionRef: { type: string }
+    OrderView:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        message: { type: string, example: Your purchase of the following reads is successful }
+        placedAt: { type: string, format: date-time }
+        cancellableUntil: { type: string, format: date-time }
+        cancellable: { type: boolean }
+        items: { type: array, items: { $ref: '#/components/schemas/OrderItemView' } }
+        subtotal: { type: number }
+        tax: { type: number }
+        deliveryCharge: { type: number }
+        discount: { type: number }
+        couponCode: { type: string, nullable: true }
+        giftPointsRedeemed: { type: integer }
+        giftPointsDiscount: { type: number }
+        giftPointsEarned: { type: integer }
+        totalAmount: { type: number }
+        estimatedDelivery: { type: string, format: date }
+        shippingAddress: { $ref: '#/components/schemas/AddressRequest' }
+        payment: { $ref: '#/components/schemas/PaymentView' }
+    StatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [SHIPPED, DELIVERED] }
+    CouponRequest:
+      type: object
+      required: [code, percentOff]
+      properties:
+        code: { type: string }
+        percentOff: { type: integer, minimum: 1, maximum: 100 }
+        expiresAt: { type: string, format: date-time, nullable: true }
+    Coupon:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        percentOff: { type: integer }
+        active: { type: boolean }
+        expiresAt: { type: string, format: date-time, nullable: true }
+    ShippingRate:
+      type: object
+      properties:
+        region: { type: string }
+        charge: { type: number }
+        deliveryDays: { type: integer }
+    ShippingEstimate:
+      type: object
+      properties:
+        deliveryDate: { type: string, format: date }
+        charge: { type: number, description: 0 means Free }
